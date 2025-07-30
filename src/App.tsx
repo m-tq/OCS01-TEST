@@ -447,7 +447,7 @@ function App() {
                             ? 'border-primary bg-primary/10'
                             : 'border-border hover:bg-muted'
                         }`}
-                        onClick={() => handleMethodSelect(method)}
+                        onClick={() => handleMethodSelect(method as ContractMethod)} // Explicitly cast to ContractMethod
                       >
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="font-medium">{method.name}</h4>
