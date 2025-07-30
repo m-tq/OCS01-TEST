@@ -25,19 +25,59 @@ import { useToast } from '@/hooks/use-toast';
 // Import contract interface
 import contractInterface from '../sample-contract/exec_interface.json';
 
+// Extend the window object to include OctraSDK
+declare global {
+  interface Window {
+    OctraSDK?: new () => OctraSDKType;
+  }
+}
+
+// Define types for OctraSDK and related objects
+interface OctraSDKType {
+  isAvailable: () => Promise<boolean>;
+  connect: (options: { appName: string; appIcon: string; permissions: string[] }) => Promise<{ success: boolean; address: string }>;
+  disconnect: () => Promise<void>;
+  viewCall: (options: { contractAddress: string; methodName: string; params: any[]; description: string }) => Promise<any>;
+  callContract: (options: { contractAddress: string; methodName: string; params: any[]; description: string; gasLimit: number; gasPrice: number }) => Promise<any>;
+  clearConnectionState: () => void;
+  provider?: {
+    on: (event: string, callback: (data: any) => void) => void;
+    off: (event: string, callback: (data: any) => void) => void;
+  };
+  isConnected?: boolean;
+  connectedAddress?: string;
+  _eventHandlers?: {
+    handleConnect: (data: any) => void;
+    handleDisconnect: () => void;
+    handleAccountsChanged: (accounts: string[]) => void;
+  };
+}
+
+interface ContractMethod {
+  name: string;
+  type: 'view' | 'call';
+  label: string;
+  params: { name: string; type: string; example?: string; max?: number }[];
+}
+
+interface ContractInterface {
+  contract: string;
+  methods: ContractMethod[];
+}
+
 function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [connectedAddress, setConnectedAddress] = useState('');
-  const [octraSDK, setOctraSDK] = useState(null);
+  const [octraSDK, setOctraSDK] = useState<OctraSDKType | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedMethod, setSelectedMethod] = useState(null);
-  const [methodParams, setMethodParams] = useState({});
-  const [lastResult, setLastResult] = useState(null);
+  const [selectedMethod, setSelectedMethod] = useState<ContractMethod | null>(null);
+  const [methodParams, setMethodParams] = useState<Record<string, string | number>>({});
+  const [lastResult, setLastResult] = useState<{ type: string; result?: any; txHash?: string } | null>(null);
   const { toast } = useToast();
 
   // Initialize Octra SDK
   useEffect(() => {
-    let sdk = null;
+    let sdk: OctraSDKType | null = null;
     
     const initSDK = async () => {
       try {
@@ -51,7 +91,7 @@ function App() {
           if (isAvailable) {
             // Set up event listeners for connection changes
             if (sdk.provider) {
-              const handleConnect = (data) => {
+              const handleConnect = (data: any) => {
                 setIsConnected(true);
                 setConnectedAddress(data.address);
                 toast({
@@ -73,7 +113,7 @@ function App() {
                 });
               };
 
-              const handleAccountsChanged = (accounts) => {
+              const handleAccountsChanged = (accounts: string[]) => {
                 if (accounts.length > 0) {
                   setConnectedAddress(accounts[0]);
                   setIsConnected(true);
@@ -165,7 +205,7 @@ function App() {
     } catch (error) {
       toast({
         title: "Connection Failed",
-        description: error.message,
+        description: (error as Error).message,
         variant: "destructive",
       });
     } finally {
@@ -192,10 +232,10 @@ function App() {
     }
   };
 
-  const handleMethodSelect = (method) => {
+  const handleMethodSelect = (method: ContractMethod) => {
     setSelectedMethod(method);
     // Initialize parameters
-    const initialParams = {};
+    const initialParams: Record<string, string | number> = {};
     method.params.forEach(param => {
       initialParams[param.name] = param.example || '';
     });
@@ -203,7 +243,7 @@ function App() {
     setLastResult(null);
   };
 
-  const handleParamChange = (paramName, value) => {
+  const handleParamChange = (paramName: string, value: string | number) => {
     setMethodParams(prev => ({
       ...prev,
       [paramName]: value
@@ -258,10 +298,10 @@ function App() {
       });
     } catch (error) {
       // Handle wallet disconnection errors more gracefully
-      if (error.message.includes('not connected') || 
-          error.message.includes('Not connected') ||
-          error.message.includes('wallet') ||
-          error.message.includes('extension')) {
+      if ((error as Error).message.includes('not connected') || 
+          (error as Error).message.includes('Not connected') ||
+          (error as Error).message.includes('wallet') ||
+          (error as Error).message.includes('extension')) {
         setIsConnected(false);
         setConnectedAddress('');
         if (octraSDK) {
@@ -275,7 +315,7 @@ function App() {
       } else {
         toast({
           title: "Execution Failed",
-          description: error.message,
+          description: (error as Error).message,
           variant: "destructive",
         });
       }
@@ -284,7 +324,7 @@ function App() {
     }
   };
 
-  const truncateAddress = (address) => {
+  const truncateAddress = (address: string) => {
     return `${address.slice(0, 8)}...${address.slice(-6)}`;
   };
 
